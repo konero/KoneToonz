@@ -9,12 +9,12 @@ on:
 env:
   BOOST_VERSION: "1.85.0"
   QT_VERSION: "5.15.2_wintab"
-  vcpkg_ref: cd5e746ec203c8c3c61647e0886a8df8c1e78e41
-  BOOST_ROOT: ${{ github.workspace }}/3rdparty/boost
+  vcpkg_ref: "cd5e746ec203c8c3c61647e0886a8df8c1e78e41"
+  BOOST_ROOT: "$GITHUB_WORKSPACE/3rdparty/boost"
   BOOST_URL: "https://sourceforge.net/projects/boost/files/boost/${{ env.BOOST_VERSION }}/boost_${{ env.BOOST_VERSION//./_}}.tar.bz2/download"
-  QT_ROOT: ${{ github.workspace }}/3rdparty/qt
+  QT_ROOT: "$GITHUB_WORKSPACE/3rdparty/qt"
   QT_URL: "https://github.com/shun-iwasawa/qt5/releases/download/v${{ env.QT_VERSION }}/Qt${{ env.QT_VERSION }}.zip"
-  LTIFF: ${{ github.workspace }}/thirdparty/tiff-4.0.3/lib/LibTIFF-4.0.3_2015_64.lib
+  LTIFF: "$GITHUB_WORKSPACE/thirdparty/tiff-4.0.3/lib/LibTIFF-4.0.3_2015_64.lib"
 
 jobs:
   build:
@@ -150,8 +150,7 @@ jobs:
         cd toonz
         mkdir build
         cd build
-        $env:BOOST_ROOT = '${{ env.BOOST_ROOT }}'
-        cmake .. -G 'Visual Studio 16 2019' -Ax64 -DQT_PATH=$env:QT_ROOT -DBOOST_ROOT=$env:BOOST_ROOT
+        cmake .. -G 'Visual Studio 16 2019' -Ax64 -DQT_PATH="$env:QT_ROOT" -DBOOST_ROOT="$env:BOOST_ROOT"
         cmake --build . --config RelWithDebInfo --target ALL_BUILD
 
     - name: Package Build Artifacts
