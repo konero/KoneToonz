@@ -22,11 +22,20 @@ jobs:
     steps:
     - name: Checkout Main Repository
       uses: actions/checkout@v4
-
-    - name: Checkout Dependencies
-      run: |
-        git clone https://github.com/mypaint/libmypaint libmypaint --branch 70f7686db792fa4953dc60f28a322bf2cd388ed7 --depth 1
-        git clone https://github.com/xiaoyeli/superlu superlu --branch a3d5233770f0caad4bc4578b46d3b26af99e9c19 --depth 1
+    
+    - name: Checkout mypaint/libmypaint
+      uses: actions/checkout@v4
+      with:
+        repository: 'mypaint/libmypaint'
+        ref: '70f7686db792fa4953dc60f28a322bf2cd388ed7'
+        path: 'libmypaint'
+        
+    - name: Checkout superlu
+      uses: actions/checkout@v4
+      with:
+        repository: 'xiaoyeli/superlu'
+        ref: 'a3d5233770f0caad4bc4578b46d3b26af99e9c19'
+        path: 'superlu'
 
     - name: Install vcpkg
       run: |
