@@ -3,34 +3,30 @@ name: Windows Build
 on:
   push:
     branches:
-      - main
-  pull_request: 
-
-env:
-  BOOST_VERSION: "1.85.0"
-  vcpkg_ref: "cd5e746ec203c8c3c61647e0886a8df8c1e78e41"
-  BOOST_ROOT: "$GITHUB_WORKSPACE/3rdparty/boost"
-  BOOST_URL: "https://sourceforge.net/projects/boost/files/boost/1.85.0/boost_1_85_0.tar.bz2/download"
-  QT_ROOT: "$GITHUB_WORKSPACE/3rdparty/qt"
-  QT_URL: "https://github.com/shun-iwasawa/qt5/releases/download/v5.15.2_wintab/Qt5.15.2_wintab.zip"
-  LTIFF: "$GITHUB_WORKSPACE/thirdparty/tiff-4.0.3/lib/LibTIFF-4.0.3_2015_64.lib"
+      - main  # Specify branches where the workflow should run
+  pull_request:  # Here no specific branches are listed to allow all pull requests to generate a workflow run
 
 jobs:
-  build:
+  Windows:
     runs-on: windows-2019
-
+    env:
+      vcpkg_ref: cd5e746ec203c8c3c61647e0886a8df8c1e78e41
+      BOOST_ROOT: ${{github.workspace}}/3rdparty/boost
+      BOOST_URL: https://sourceforge.net/projects/boost/files/boost/1.85.0/boost_1_85_0.tar.bz2/download
+      QT_ROOT: ${{github.workspace}}/3rdparty/qt
+      QT_URL: https://github.com/shun-iwasawa/qt5/releases/download/v5.15.2_wintab/Qt5.15.2_wintab.zip
+      LTIFF: ${{github.workspace}}/thirdparty/tiff-4.0.3/lib/LibTIFF-4.0.3_2015_64.lib
     steps:
-    - name: Checkout Main Repository
-      uses: actions/checkout@v4
-    
+    - uses: actions/checkout@v4
+
     - name: Checkout mypaint/libmypaint
       uses: actions/checkout@v4
       with:
         repository: 'mypaint/libmypaint'
         ref: '70f7686db792fa4953dc60f28a322bf2cd388ed7'
         path: 'libmypaint'
-        
-    - name: Checkout superlu
+
+    - name: Checkout xiaoyeli/superlu
       uses: actions/checkout@v4
       with:
         repository: 'xiaoyeli/superlu'
@@ -40,18 +36,19 @@ jobs:
     - name: Install vcpkg
       run: |
         rm -r -fo C:/vcpkg
-        git clone https://github.com/Microsoft/vcpkg C:/vcpkg
-        cd C:/vcpkg
-        git checkout ${{ env.vcpkg_ref }}
+        cd C:/
+        git clone https://github.com/Microsoft/vcpkg
+        cd vcpkg
+        git checkout "$env:vcpkg_ref"
         ./bootstrap-vcpkg.bat
 
     - uses: actions/cache@v4
       with:
-        path: C:/vcpkg/installed
-        key: ${{ runner.os }}-vcpkg-${{ env.vcpkg_ref }}-${{ github.sha }}
-        restore-keys: ${{ runner.os }}-vcpkg-${{ env.vcpkg_ref }}-
+       path: C:/vcpkg/installed
+       key: ${{ runner.os }}-vcpkg-${{ env.vcpkg_ref }}-${{ github.sha }}
+       restore-keys: ${{ runner.os }}-vcpkg-${{ env.vcpkg_ref }}-
 
-    - name: Install Libraries with vcpkg
+    - name: Install libraries
       run: |
         vcpkg install --clean-after-build --triplet x64-windows icu
         vcpkg install --clean-after-build --triplet x64-windows-static json-c libjpeg-turbo libpng lz4 lzo openblas zlib
@@ -61,14 +58,14 @@ jobs:
 
     - name: Cache Qt
       id: cache-qt
-      uses: actions/cache@v4
+      uses: actions/cache@v2
       with:
-        path: ${{ env.QT_ROOT }}
+        path: ${{env.QT_ROOT}}
         key: ${{ runner.os }}-QtCache
 
     - name: Install Qt
-      if: steps.cache-qt.outputs.cache-hit != 'true'
       run: |
+        # fix up paths to be forward slashes consistently
         QT_ROOT=$(echo $QT_ROOT | sed 's/\\/\//g')
         mkdir -p $QT_ROOT
         curl --progress-bar -L -o $QT_ROOT/Qt.zip $QT_URL
@@ -76,25 +73,26 @@ jobs:
         rm -f $QT_ROOT/Qt.zip
       shell: bash
 
-    - name: Cache Boost
-      id: cache-boost
+    - name: Restore Boost cache
       uses: actions/cache@v4
+      id: cache-boost
       with:
-        path: ${{ env.BOOST_ROOT }}
-        key: boost-${{ env.BOOST_VERSION }}
+        path: ${{env.BOOST_ROOT}}
+        key: boost
 
     - name: Install Boost
       if: steps.cache-boost.outputs.cache-hit != 'true'
       run: |
+        # fix up paths to be forward slashes consistently
         BOOST_ROOT=$(echo $BOOST_ROOT | sed 's/\\/\//g')
-        mkdir -p $env.BOOST_ROOT
+        mkdir -p $BOOST_ROOT
         curl --progress-bar --location --output $BOOST_ROOT/download.tar.bz2 $BOOST_URL
         7z -o$BOOST_ROOT x $BOOST_ROOT/download.tar.bz2 -y -bd
         7z -o$BOOST_ROOT x $BOOST_ROOT/download.tar -y -bd
         cd $BOOST_ROOT && cp -r boost_*/* .
         rm -rf boost_*/* download.tar.bz2 download.tar
       shell: bash
-
+      
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
@@ -109,13 +107,13 @@ jobs:
         $env:Path += ';C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/MSBuild/Current/Bin'
         msbuild LibTIFF.vcxproj /p:PlatformToolset=v142 /p:Platform=x64 /p:Configuration=Release -maxcpucount:3
 
-    - name: Build libmypaint
+    - name: Build mypaint/libmypaint
       run: |
         cd libmypaint
         cp ../.github/workflows/CMakeLists.txt .
         echo '#define MYPAINT_CONFIG_USE_GLIB 0' > config.h
         python generate.py mypaint-brush-settings-gen.h brushsettings-gen.h
-        mkdir build
+        mkdir build | Out-Null
         cd build
         cmake ../ -G 'Visual Studio 16 2019' -Ax64 -Djson-c_DIR='C:/vcpkg/installed/x64-windows-static/share/json-c/' -DJSON-C_INCLUDE_DIR='C:/vcpkg/installed/x64-windows-static/include/json-c/'
         cmake --build . --config Release
@@ -124,15 +122,15 @@ jobs:
         lib /OUT:libmypaint.lib Release/libmypaint.lib json-c.lib
         cp libmypaint.lib Release/libmypaint.lib
 
-    - name: Build superlu
+    - name: Build xiaoyeli/superlu
       run: |
         cd superlu
-        mkdir build
+        mkdir build | Out-Null
         cd build
         cmake ../ -G 'Visual Studio 16 2019' -Ax64 -DXSDK_ENABLE_Fortran=OFF -Denable_tests=OFF
         cmake --build . --config Release
 
-    - name: Workaround for Library Paths
+    - name: Workaround
       run: |
         cd thirdparty
         cp C:/vcpkg/installed/x64-windows-static/lib/libpng16.lib libpng-1.6.21/lib/libpng16_2015_64.lib
@@ -148,31 +146,43 @@ jobs:
         cp C:/vcpkg/installed/x64-windows-static/lib/turbojpeg.lib libjpeg-turbo/lib/turbojpeg-static_2015_64.lib
         cp C:/vcpkg/installed/x64-windows-static/lib/jpeg.lib libjpeg-turbo/lib/jpeg-static_2015_64.lib
 
-    - name: Copy Headers
+    - name: Copy headers
       run: |
         cd thirdparty
         cp libpng-1.6.21/scripts/pnglibconf.h.prebuilt libpng-1.6.21/pnglibconf.h
 
-    - name: Build Main Project
+    - name: Build
       run: |
         cd toonz
-        mkdir build
+        mkdir build | Out-Null
         cd build
-        cmake .. -G 'Visual Studio 16 2019' -Ax64 -DQT_PATH="$env:QT_ROOT" -DBOOST_ROOT="$env:BOOST_ROOT"
-        cmake --build . --config RelWithDebInfo --target ALL_BUILD
+        $env:BOOST_ROOT = '${{ env.BOOST_ROOT }}'
+        $env:QT_PATH = '${{ env.QT_ROOT }}/Qt5.15.2_wintab/5.15.2_wintab/msvc2019_64'
+        cmake ../sources -G 'Visual Studio 16 2019' -Ax64 -DCMAKE_TOOLCHAIN_FILE='C:/vcpkg/scripts/buildsystems/vcpkg.cmake' -DProtobuf_DIR='C:/vcpkg/installed/x64-windows/share/protobuf/' -Dquirc_DIR='C:/vcpkg/installed/x64-windows/share/quirc/' -DTIFF_LIBRARY="$env:LTIFF"  -DQT_PATH="$env:QT_PATH" -DOpenCV_DIR='C:/vcpkg/installed/x64-windows/share/opencv' -DBOOST_ROOT="$env:BOOST_ROOT" -DWITH_WINTAB=ON 
+        cmake --build . --config Release
 
-    - name: Package Build Artifacts
-      run: |
-        cd toonz/build
-        cp RelWithDebInfo/OpenToonz.exe ../../../
-        7z a -tzip -mx=9 artifacts.zip RelWithDebInfo/
-      shell: bash
+    - name: Create Artifact
       env:
-        BOOST_ROOT: ${{ env.BOOST_ROOT }}
-        QT_ROOT: ${{ env.QT_ROOT }}
+        VCINSTALLDIR: 'C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC'
+      run: |
+        mkdir artifact | Out-Null
+        cd artifact
+        cp -Recurse ../stuff portablestuff
+        cp ../toonz/build/Release/* .
+        ${{ env.QT_ROOT }}/Qt5.15.2_wintab/5.15.2_wintab/msvc2019_64/bin/windeployqt.exe OpenToonz.exe
+        cp C:/vcpkg/installed/x64-windows/bin/freeglut.dll .
+        cp C:/vcpkg/installed/x64-windows/bin/glew32.dll .
+        cp C:/vcpkg/installed/x64-windows/bin/opencv_world4.dll .
+        cp C:/vcpkg/installed/x64-windows/bin/zlib1.dll .
+        cp C:/vcpkg/installed/x64-windows/bin/libwebp.dll .
+        cp C:/vcpkg/installed/x64-windows/bin/libpng16.dll .
+        cp C:/vcpkg/installed/x64-windows/bin/jpeg62.dll .
+        cp C:/vcpkg/installed/x64-windows/bin/tiff.dll .
+        cp C:/vcpkg/installed/x64-windows/bin/liblzma.dll .
+        cp C:/vcpkg/installed/x64-windows/bin/libprotobuf.dll .
+        cp C:/vcpkg/installed/x64-windows/bin/libwebpdecoder.dll .
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
       with:
-        name: toonz-build
-        path: toonz/build/artifacts.zip
+        name: Opentoonz-${{ runner.os }}-${{ github.sha }}
+        path: artifact
